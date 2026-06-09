@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FONTES ROMAE</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --travertine:   #F0EAE0;
+      --stone-light:  #E5DDD0;
+      --stone-mid:    #BEA882;
+      --stone-dark:   #7A6040;
+      --antique:      #261810;
+      --gold:         #9A7838;
+      --water:        #5E8E9E;
+      --water-dim:    #8AAEBB;
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'EB Garamond', Georgia, serif;
+      background: var(--travertine);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── MAP ───────────────────────────────────── */
+    #map {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    /* ── LOADING ───────────────────────────────── */
+    #loading {
+      position: fixed;
+      inset: 0;
+      z-index: 3000;
+      background: var(--travertine);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1.25rem;
+      transition: opacity 0.6s ease;
+    }
+    #loading.fade-out { opacity: 0; pointer-events: none; }
+
+    .loading-rule {
+      width: 48px;
+      height: 1px;
+      background: var(--stone-mid);
+      margin-bottom: 0.25rem;
+    }
+    .loading-title {
+      font-family: 'Cinzel', serif;
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: 0.28em;
+      color: var(--antique);
+    }
+    .loading-sub {
+      font-family: 'EB Garamond', serif;
+      font-size: 1rem;
+      font-style: italic;
+      color: var(--stone-dark);
+      letter-spacing: 0.08em;
+    }
+    .loading-dots {
+      display: flex;
+      gap: 0.45rem;
+      margin-top: 0.5rem;
+    }
+    .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--stone-mid);
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    .dot:nth-child(2) { animation-delay: 0.22s; }
+    .dot:nth-child(3) { animation-delay: 0.44s; }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.25; transform: scale(0.7); }
+      50% { opacity: 1; transform: scale(1.15); }
+    }
+
+    /* ── HEADER ─────────────────────────────────── */
+    #header {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      z-index: 1000;
+      padding: 1.4rem 1.6rem 3rem;
+      background: linear-gradient(to bottom, rgba(240,234,224,0.97) 55%, transparent);
+      pointer-events: none;
+    }
+    .header-inner {
+      display: flex;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      pointer-events: all;
+    }
+
+    .app-title {
+      font-family: 'Cinzel', serif;
+      font-weight: 700;
+      font-size: 1.45rem;
+      letter-spacing: 0.22em;
+      color: var(--antique);
+      line-height: 1;
+    }
+    .app-title small {
+      display: block;
+      font-size: 0.58rem;
+      font-weight: 400;
+      letter-spacing: 0.32em;
+      color: var(--stone-dark);
+      margin-top: 0.35rem;
+    }
+
+    .filters {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+    }
+    .filter-btn {
+      font-family: 'Cinzel', serif;
+      font-size: 0.6rem;
+      letter-spacing: 0.16em;
+      padding: 0.38rem 0.9rem;
+      border: 1px solid var(--stone-mid);
+      border-radius: 1px;
+      background: rgba(240,234,224,0.88);
+      color: var(--stone-dark);
+      cursor: pointer;
+      transition: all 0.18s;
+      white-space: nowrap;
+    }
+    .filter-btn:hover { border-color: var(--antique); color: var(--antique); }
+    .filter-btn.active {
+      background: var(--antique);
+      color: var(--travertine);
+      border-color: var(--antique);
+    }
+
+    .header-count {
+      font-family: 'EB Garamond', serif;
+      font-size: 0.88rem;
+      font-style: italic;
+      color: var(--stone-dark);
+      padding-bottom: 0.18rem;
+    }
+
+    /* ── LEGEND ─────────────────────────────────── */
+    #legend {
+      position: absolute;
+      bottom: 2.5rem;
+      left: 1rem;
+      z-index: 1000;
+      background: rgba(240,234,224,0.93);
+      border: 1px solid var(--stone-mid);
+      padding: 0.9rem 1.1rem;
+      pointer-events: none;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      margin-bottom: 0.45rem;
+      font-family: 'Cinzel', serif;
+      font-size: 0.58rem;
+      letter-spacing: 0.12em;
+      color: var(--stone-dark);
+    }
+    .legend-item:last-child { margin-bottom: 0; }
+    .legend-dot-gold {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--gold); border: 2px solid white;
+      flex-shrink: 0;
+    }
+    .legend-dot-water {
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--water); opacity: 0.8; border: 1.5px solid white;
+      flex-shrink: 0;
+    }
+
+    /* ── DETAIL PANEL ───────────────────────────── */
+    #panel {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      z-index: 2000;
+      background: var(--travertine);
+      border-top: 1px solid var(--stone-mid);
+      transform: translateY(100%);
+      transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+      max-height: 58vh;
+      overflow-y: auto;
+    }
+    #panel.open { transform: translateY(0); }
+
+    .panel-inner { padding: 1.6rem 1.6rem 2.4rem; }
+
+    .panel-close {
+      position: absolute;
+      top: 1rem; right: 1.1rem;
+      background: none; border: none;
+      font-family: 'Cinzel', serif;
+      font-size: 0.75rem;
+      letter-spacing: 0.1em;
+      color: var(--stone-dark);
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+    .panel-close:hover { color: var(--antique); }
+
+    .panel-badge {
+      display: inline-block;
+      font-family: 'Cinzel', serif;
+      font-size: 0.56rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      padding: 0.22rem 0.6rem;
+      border: 1px solid currentColor;
+      margin-bottom: 0.75rem;
+    }
+    .panel-badge.historic { color: var(--gold); }
+    .panel-badge.nasone   { color: var(--water); }
+
+    .panel-name {
+      font-family: 'Cinzel', serif;
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      color: var(--antique);
+      line-height: 1.25;
+      margin-bottom: 0.25rem;
+    }
+    .panel-meta {
+      font-size: 0.88rem;
+      font-style: italic;
+      color: var(--stone-dark);
+      margin-bottom: 1.1rem;
+    }
+    .panel-rule {
+      width: 36px; height: 1px;
+      background: var(--stone-mid);
+      margin-bottom: 1.1rem;
+    }
+    .panel-note {
+      font-size: 1.08rem;
+      line-height: 1.82;
+      color: var(--antique);
+    }
+    .panel-aqueduct {
+      margin-top: 1.1rem;
+      padding: 0.8rem 1rem;
+      background: rgba(154,120,56,0.08);
+      border-left: 2px solid var(--gold);
+      font-size: 0.93rem;
+      font-style: italic;
+      color: var(--stone-dark);
+      line-height: 1.65;
+    }
+    .panel-aqueduct::before {
+      content: 'Aqueduct — ';
+      font-style: normal;
+      font-family: 'Cinzel', serif;
+      font-size: 0.56rem;
+      letter-spacing: 0.18em;
+      color: var(--gold);
+      display: block;
+      margin-bottom: 0.35rem;
+    }
+
+    /* Panel photo */
+    .panel-photo-wrap {
+      width: 100%;
+      overflow: hidden;
+      background: var(--stone-light);
+      position: relative;
+      margin-bottom: 0;
+      max-height: 70vh;
+    }
+    .panel-photo-wrap img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: opacity 0.4s;
+    }
+    /* Google Maps link */
+    .panel-maps-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 1.1rem;
+      font-family: 'Cinzel', serif;
+      font-size: 0.6rem;
+      letter-spacing: 0.16em;
+      color: var(--stone-dark);
+      text-decoration: none;
+      border-bottom: 1px solid var(--stone-mid);
+      padding-bottom: 0.1rem;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .panel-maps-link:hover { color: var(--antique); border-color: var(--antique); }
+    .panel-photo-wrap img.loading { opacity: 0; }
+    .panel-photo-credit {
+      position: absolute;
+      bottom: 0; right: 0;
+      background: rgba(38,24,16,0.5);
+      color: rgba(255,255,255,0.7);
+      font-family: 'EB Garamond', serif;
+      font-size: 0.65rem;
+      font-style: italic;
+      padding: 0.2rem 0.5rem;
+    }
+    .panel-photo-skeleton {
+      position: absolute; inset: 0;
+      background: linear-gradient(90deg, var(--stone-light) 25%, var(--stone-mid) 50%, var(--stone-light) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── LOCATE BUTTON ─────────────────────────── */
+    #locate-btn {
+      position: absolute;
+      bottom: 6.2rem;
+      right: 0.6rem;
+      z-index: 1000;
+      width: 34px; height: 34px;
+      background: rgba(240,234,224,0.93);
+      border: 1px solid var(--stone-mid);
+      border-radius: 2px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, border-color 0.15s;
+      color: var(--stone-dark);
+    }
+    #locate-btn:hover { background: var(--stone-light); border-color: var(--antique); color: var(--antique); }
+    #locate-btn.active { border-color: #4A90B8; color: #4A90B8; background: rgba(74,144,184,0.08); }
+    #locate-btn.error  { border-color: #B84A4A; color: #B84A4A; }
+
+    /* Pulsing location dot */
+    .location-dot {
+      position: relative;
+      width: 16px; height: 16px;
+    }
+    .location-dot-inner {
+      width: 10px; height: 10px;
+      background: #4A90B8;
+      border-radius: 50%;
+      border: 2px solid white;
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .location-dot-pulse {
+      width: 26px; height: 26px;
+      background: rgba(74,144,184,0.2);
+      border-radius: 50%;
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      animation: locpulse 2s ease-out infinite;
+    }
+    @keyframes locpulse {
+      0%   { transform: translate(-50%,-50%) scale(0.4); opacity: 0.8; }
+      100% { transform: translate(-50%,-50%) scale(1.8); opacity: 0; }
+    }
+
+    /* ── LEAFLET OVERRIDES ──────────────────────── */
+    .leaflet-control-zoom a {
+      font-family: 'Cinzel', serif !important;
+      color: var(--antique) !important;
+      background: rgba(240,234,224,0.92) !important;
+      border-color: var(--stone-mid) !important;
+    }
+    .leaflet-control-attribution {
+      font-family: 'EB Garamond', serif !important;
+      font-size: 0.68rem !important;
+      background: rgba(240,234,224,0.82) !important;
+      color: var(--stone-dark) !important;
+    }
+    .leaflet-control-attribution a { color: var(--stone-dark) !important; }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="loading-rule"></div>
+  <div class="loading-title">FONTES ROMAE</div>
+  <div class="loading-sub">Locating the waters of the Eternal City</div>
+  <div class="loading-dots">
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  </div>
+</div>
+
+<!-- Header -->
+<div id="header">
+  <div class="header-inner">
+    <div class="app-title">
+      FONTES ROMAE
+      <small>Drinking Fountains of Rome</small>
+    </div>
+    <div class="filters">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="historic">Historic</button>
+      <button class="filter-btn" data-filter="nasone">Nasoni</button>
+    </div>
+    <span class="header-count" id="header-count"></span>
+  </div>
+</div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<!-- Locate button -->
+<button id="locate-btn" title="Show my location">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+    <path d="M12 8a4 4 0 100 8 4 4 0 000-8z" stroke-width="1.5"/>
+  </svg>
+</button>
+
+<!-- Legend -->
+<div id="legend">
+  <div class="legend-item">
+    <div class="legend-dot-gold"></div>
+    Historic Fountain
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot-water"></div>
+    Nasone
+  </div>
+</div>
+
+<!-- Detail Panel -->
+<div id="panel">
+  <div class="panel-photo-wrap" id="panel-photo-wrap" style="display:none">
+    <div class="panel-photo-skeleton" id="panel-photo-skeleton"></div>
+    <img id="panel-photo" class="loading" src="" alt="" />
+    <div class="panel-photo-credit" id="panel-photo-credit"></div>
+  </div>
+  <div class="panel-inner">
+    <button class="panel-close" id="panel-close">CLOSE ✕</button>
+    <div class="panel-badge" id="panel-badge"></div>
+    <div class="panel-name" id="panel-name"></div>
+    <div class="panel-meta" id="panel-meta"></div>
+    <div class="panel-rule" id="panel-rule"></div>
+    <div class="panel-note" id="panel-note"></div>
+    <div class="panel-aqueduct" id="panel-aqueduct"></div>
+    <a class="panel-maps-link" id="panel-maps-link" href="#" target="_blank" rel="noopener">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      OPEN IN GOOGLE MAPS
+    </a>
+  </div>
+</div>
+
+<script>
+// ── Historic Fountain Data ────────────────────────────────────────────────────
+const HISTORIC = [
+  {
+    id: 'facchino',
+    name: 'Fontana del Facchino',
+    lat: 41.8988, lon: 12.4803,
+    wiki: 'en:Fontana_del_Facchino',
+    meta: 'Via Lata · c. 1580 · Acqua Vergine',
+    note: 'One of Rome\'s six "talking statues" — ancient figures where citizens posted anonymous satirical verses against the powerful. This small wall fountain depicts a member of the Acquaroli, the guild of water-carriers who supplied Rome before the aqueducts were fully restored. Embedded in a palazzo wall on Via Lata, it is easily overlooked by those who do not seek it.',
+    aqueduct: 'Fed by the Acqua Vergine, built in 19 BC by Marcus Agrippa — the same aqueduct that still supplies the Trevi Fountain two thousand years later.',
+  },
+  {
+    id: 'acetosa',
+    name: 'Fonte dell\'Acqua Acetosa',
+    lat: 41.9272, lon: 12.4738,
+    wiki: 'it:Acqua_Acetosa_(fonte)',
+    meta: 'Lungotevere Acqua Acetosa · Pavilion 1661',
+    note: 'The sour water spring has been known since antiquity for its slightly acidic, mineral taste. The small baroque pavilion was built in 1661 for Pope Alexander VII. Johann Wolfgang von Goethe drank here during his Italian Journey and wrote of its peculiar refreshment. The water still flows today — still slightly mineral, still free, still slightly strange on the tongue.',
+    aqueduct: null,
+  },
+  {
+    id: 'navona',
+    name: 'Nasone di Piazza Navona',
+    lat: 41.8993, lon: 12.4733,
+    wiki: 'en:Piazza_Navona',
+    meta: 'Piazza Navona · c. 1874 · Acqua Vergine',
+    note: 'A humble cast-iron nasone stands in the shadow of Bernini\'s Fontana dei Quattro Fiumi (1651). The piazza follows the elongated oval of the ancient Stadium of Domitian (1st century AD). The same spring that supplied the stadium\'s baths now flows through this small iron spout — a democratic counterpoint to the baroque grandeur surrounding it.',
+    aqueduct: 'Fed by the Acqua Vergine, which has supplied the Campus Martius continuously since 19 BC, when Agrippa completed the aqueduct to supply his new public baths.',
+  },
+
+  // ── Pietro Lombardi's Fontane Rionali (1926) ────────────
+  {
+    id: 'libri',
+    name: 'Fontanella dei Libri',
+    lat: 41.8993, lon: 12.4726,
+    wiki: 'it:Fontanella_dei_libri',
+    meta: 'Via degli Staderari · 1927 · Pietro Lombardi',
+    note: 'Four books, five spheres, the letters S.P.Q.R., and the head of a stag — Lombardi\'s most cryptic design. The stag refers to the nearby church of Sant\'Eustachio; the books to the Sapienza, Rome\'s ancient university; the balls to the Palazzo Madama (once Medici property). Every element is a riddle about the neighborhood, legible only to those who already know it.',
+    aqueduct: null,
+  },
+  {
+    id: 'artisti',
+    name: 'Fontanella degli Artisti',
+    lat: 41.9072, lon: 12.4780,
+    wiki: 'it:Fontanella_degli_artisti',
+    meta: 'Via Margutta · 1927 · Pietro Lombardi',
+    note: 'Via Margutta has been Rome\'s artists\' street since the 17th century — Fellini lived here, as did generations of painters and sculptors. Lombardi\'s design features a painter\'s palette and brushes: a drinking fountain for working artists, not a gallery piece. The street\'s walls are still covered in murals. Drink here as Fellini once did.',
+    aqueduct: null,
+  },
+  {
+    id: 'botte',
+    name: 'Fontanella della Botte',
+    lat: 41.8888, lon: 12.4703,
+    wiki: 'it:Fontanella_della_botte',
+    meta: 'Via della Cisterna · 1927 · Pietro Lombardi · Trastevere',
+    note: 'A wine barrel (botte) in cast iron — Lombardi\'s tribute to Trastevere\'s tradition as the drinking quarter of Rome. The street name itself, Via della Cisterna, recalls the ancient water cisterns that once stored water for this neighborhood. Trastevere\'s tavern culture goes back to antiquity; the fountain carries that memory in its shape.',
+    aqueduct: null,
+  },
+  {
+    id: 'tiare',
+    name: 'Fontanella delle Tiare',
+    lat: 41.9027, lon: 12.4582,
+    wiki: 'it:Fontanella_delle_tiare',
+    meta: 'Porta Angelica · 1927 · Pietro Lombardi · Borgo',
+    note: 'At the entrance to the Borgo — the papal neighborhood — Lombardi crowned his fountain with three papal tiaras (tiare). Pilgrims have passed through here for over a millennium, walking toward St. Peter\'s. This small drinking fountain reminds them, as they enter, whose city they are in.',
+    aqueduct: null,
+  },
+  {
+    id: 'cannone',
+    name: 'Fontanella delle Palle di Cannone',
+    lat: 41.9024, lon: 12.4645,
+    wiki: 'it:Fontanella_delle_palle_di_cannone',
+    meta: 'Largo di Porta Castello · 1927 · Pietro Lombardi · Borgo',
+    note: 'Cannonballs (palle di cannone) in stone, at the foot of Castel Sant\'Angelo — the mausoleum of Hadrian that became Rome\'s fortress. The Borgo was the military gateway of the papal city; cannon fire from the castle decided the fate of popes and armies for centuries. Lombardi turned that history into a drinking fountain.',
+    aqueduct: null,
+  },
+  {
+    id: 'monti',
+    name: 'Fontanella dei Monti',
+    lat: 41.8932, lon: 12.5013,
+    wiki: 'it:Fontanella_dei_monti',
+    meta: 'Via San Vito · 1927 · Pietro Lombardi · Rione Monti',
+    note: 'Three mountains for the oldest residential rione in Rome, which takes its name from the hills it occupies. Via San Vito sits in the ancient working-class heart of the city, where artisans and laborers lived in the shadow of the Imperial fora. The Colosseum is a ten-minute walk. Lombardi put the landscape itself into the fountain.',
+    aqueduct: null,
+  },
+  {
+    id: 'pigna',
+    name: 'Fontanella della Pigna',
+    lat: 41.8959, lon: 12.4812,
+    wiki: 'it:Fontanella_della_pigna',
+    meta: 'Piazza di San Marco · 1927 · Pietro Lombardi · Rione Pigna',
+    note: 'The rione della Pigna takes its name from a giant bronze pine cone from antiquity, now in the Vatican Museums. Lombardi echoed this with a small pine cone on the fountain in Piazza di San Marco. The neighborhood sits between the Vittoriano and the Pantheon — its symbol is a pinecone, its water is cold, its fountain asks you to remember.',
+    aqueduct: null,
+  },
+
+  // ── Original Dragon-Spout Nasoni (1874) ────────────────
+  {
+    id: 'dragon-tre-cannelle',
+    name: 'Dragon Nasone — Via delle Tre Cannelle',
+    lat: 41.8947, lon: 12.4839,
+    wiki: 'en:Nasone',
+    meta: 'Via delle Tre Cannelle · Original 1874 design',
+    note: 'The first nasoni installed in 1874 had three dragon-headed nozzles — nothing like the smooth curved spout that gave later fountains their familiar name. This is one of the few surviving examples of the original design, tucked near the Roman Forum. Three iron dragons offer water where Romans have drunk for two thousand years.',
+    aqueduct: null,
+  },
+  {
+    id: 'dragon-teodoro',
+    name: 'Dragon Nasone — Via di San Teodoro',
+    lat: 41.8892, lon: 12.4835,
+    wiki: 'en:Nasone',
+    meta: 'Via di San Teodoro · Original 1874 design · Palatine Hill',
+    note: 'At the base of the Palatine Hill — where Rome\'s first settlements were built in the 8th century BC — this original-design nasone with three dragon nozzles still flows. The Palatine above it contains the ruins of emperors\' palaces. Below, an iron dragon from 1874 offers the same water, still free, still cold.',
+    aqueduct: null,
+  },
+];
+
+// ── Map Setup ─────────────────────────────────────────────────────────────────
+const map = L.map('map', {
+  center: [41.8967, 12.4822],
+  zoom: 14,
+  zoomControl: false,
+});
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a> · © <a href="https://carto.com">CARTO</a>',
+  subdomains: 'abcd',
+  maxZoom: 20,
+}).addTo(map);
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+// ── Marker Icons ──────────────────────────────────────────────────────────────
+function makeNasoneIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<svg width="13" height="13" viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="4.5" fill="#5E8E9E" fill-opacity="0.72" stroke="white" stroke-width="1.5"/></svg>`,
+    iconSize: [13, 13], iconAnchor: [6.5, 6.5],
+  });
+}
+
+function makeHistoricIcon(active) {
+  const c = active ? '#9A7838' : '#BEA882';
+  return L.divIcon({
+    className: '',
+    html: `<svg width="22" height="22" viewBox="0 0 22 22">
+      <circle cx="11" cy="11" r="9" fill="${c}" stroke="white" stroke-width="2"/>
+      <circle cx="11" cy="11" r="3.5" fill="rgba(255,255,255,0.55)"/>
+    </svg>`,
+    iconSize: [22, 22], iconAnchor: [11, 11],
+  });
+}
+
+// ── Layers & State ────────────────────────────────────────────────────────────
+const nasoniLayer   = L.layerGroup().addTo(map);
+const historicLayer = L.layerGroup().addTo(map);
+let allNasoniCount  = 0;
+let activeFilter    = 'all';
+let historicMarkerMap = {};
+
+// ── Panel ─────────────────────────────────────────────────────────────────────
+const panel = document.getElementById('panel');
+
+async function openPanel({ badge, badgeClass, name, meta, note, aqueduct, wiki, lat, lon }) {
+  document.getElementById('panel-badge').textContent  = badge;
+  document.getElementById('panel-badge').className    = `panel-badge ${badgeClass}`;
+  document.getElementById('panel-name').textContent   = name;
+  document.getElementById('panel-meta').textContent   = meta || '';
+
+  const noteEl = document.getElementById('panel-note');
+  noteEl.textContent   = note || '';
+  noteEl.style.display = note ? 'block' : 'none';
+  document.getElementById('panel-rule').style.display = note ? 'block' : 'none';
+
+  const aqEl = document.getElementById('panel-aqueduct');
+  if (aqueduct) { aqEl.textContent = aqueduct; aqEl.style.display = 'block'; }
+  else            { aqEl.style.display = 'none'; }
+
+  // Google Maps link
+  const mapsLink = document.getElementById('panel-maps-link');
+  if (lat != null && lon != null) {
+    mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+    mapsLink.style.display = 'inline-flex';
+  } else {
+    mapsLink.style.display = 'none';
+  }
+
+  // Photo
+  const photoWrap     = document.getElementById('panel-photo-wrap');
+  const photoImg      = document.getElementById('panel-photo');
+  const photoSkeleton = document.getElementById('panel-photo-skeleton');
+  const photoCredit   = document.getElementById('panel-photo-credit');
+
+  if (wiki) {
+    photoWrap.style.display = 'block';
+    photoWrap.style.aspectRatio = '16/9'; // default while loading
+    photoImg.className = 'loading';
+    photoImg.src = '';
+    photoSkeleton.style.display = 'block';
+    photoCredit.textContent = '';
+
+    try {
+      const colonIdx = wiki.indexOf(':');
+      const lang  = colonIdx > 0 ? wiki.slice(0, colonIdx) : 'en';
+      const slug  = colonIdx > 0 ? wiki.slice(colonIdx + 1) : wiki;
+      const res   = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${slug}`);
+      const data  = await res.json();
+      const src  = data.originalimage?.source || data.thumbnail?.source;
+
+      if (src) {
+        photoImg.onload = () => {
+          // Adjust aspect ratio to match image orientation
+          const w = photoImg.naturalWidth;
+          const h = photoImg.naturalHeight;
+          if (h > w) {
+            // Portrait — cap at 3:4 to avoid huge height
+            const ratio = Math.min(w / h, 3 / 4);
+            photoWrap.style.aspectRatio = `${ratio * 100} / 100`;
+          } else {
+            // Landscape — use natural ratio, capped at 16:9
+            const ratio = Math.min(w / h, 16 / 9);
+            photoWrap.style.aspectRatio = `${ratio * 100} / 100`;
+          }
+          photoImg.classList.remove('loading');
+          photoSkeleton.style.display = 'none';
+        };
+        photoImg.src = src;
+        photoCredit.textContent = '© Wikimedia Commons';
+      } else {
+        photoWrap.style.display = 'none';
+      }
+    } catch {
+      photoWrap.style.display = 'none';
+    }
+  } else {
+    photoWrap.style.display = 'none';
+  }
+
+  panel.classList.add('open');
+}
+
+function closePanel() {
+  panel.classList.remove('open');
+  Object.values(historicMarkerMap).forEach(m => m.setIcon(makeHistoricIcon(false)));
+}
+
+document.getElementById('panel-close').addEventListener('click', closePanel);
+map.on('click', closePanel);
+
+// ── Historic Markers ──────────────────────────────────────────────────────────
+HISTORIC.forEach(f => {
+  const marker = L.marker([f.lat, f.lon], { icon: makeHistoricIcon(false) });
+  marker.on('click', e => {
+    L.DomEvent.stopPropagation(e);
+    Object.values(historicMarkerMap).forEach(m => m.setIcon(makeHistoricIcon(false)));
+    marker.setIcon(makeHistoricIcon(true));
+    map.panTo([f.lat, f.lon], { animate: true, duration: 0.5 });
+    openPanel({ badge: 'Historic Fountain', badgeClass: 'historic', name: f.name, meta: f.meta, note: f.note, aqueduct: f.aqueduct, wiki: f.wiki, lat: f.lat, lon: f.lon });
+  });
+  historicLayer.addLayer(marker);
+  historicMarkerMap[f.id] = marker;
+});
+
+// ── Overpass API ──────────────────────────────────────────────────────────────
+async function fetchNasoni() {
+  const q = `[out:json][timeout:30];(node["amenity"="drinking_water"](41.85,12.40,41.96,12.56););out body;`;
+  try {
+    const res = await fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q));
+    const data = await res.json();
+    return data.elements || [];
+  } catch {
+    return [];
+  }
+}
+
+// ── Count Label ───────────────────────────────────────────────────────────────
+function updateCount() {
+  const parts = [];
+  if (activeFilter !== 'nasone')  parts.push(`${HISTORIC.length} historic`);
+  if (activeFilter !== 'historic') parts.push(`${allNasoniCount} nasoni`);
+  document.getElementById('header-count').textContent = parts.join(' · ');
+}
+
+// ── Filters ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeFilter = btn.dataset.filter;
+
+    if (activeFilter === 'historic') {
+      map.removeLayer(nasoniLayer);
+      if (!map.hasLayer(historicLayer)) map.addLayer(historicLayer);
+    } else if (activeFilter === 'nasone') {
+      map.removeLayer(historicLayer);
+      if (!map.hasLayer(nasoniLayer)) map.addLayer(nasoniLayer);
+    } else {
+      if (!map.hasLayer(nasoniLayer))   map.addLayer(nasoniLayer);
+      if (!map.hasLayer(historicLayer)) map.addLayer(historicLayer);
+    }
+    updateCount();
+    closePanel();
+  });
+});
+
+// ── Geolocation ───────────────────────────────────────────────────────────────
+let locationMarker = null;
+let locationCircle = null;
+const locateBtn = document.getElementById('locate-btn');
+
+function makeLocationIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div class="location-dot">
+      <div class="location-dot-pulse"></div>
+      <div class="location-dot-inner"></div>
+    </div>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  });
+}
+
+locateBtn.addEventListener('click', () => {
+  if (!navigator.geolocation) {
+    showToast('Geolocation is not supported by your browser.');
+    return;
+  }
+
+  locateBtn.classList.remove('error');
+  locateBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation:dotpulse 1s infinite"><circle cx="12" cy="12" r="10"/></svg>`;
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+
+      // Remove old markers
+      if (locationMarker) map.removeLayer(locationMarker);
+      if (locationCircle) map.removeLayer(locationCircle);
+
+      // Accuracy circle
+      locationCircle = L.circle([lat, lon], {
+        radius: accuracy,
+        color: '#4A90B8',
+        fillColor: '#4A90B8',
+        fillOpacity: 0.08,
+        weight: 1,
+      }).addTo(map);
+
+      // Location dot
+      locationMarker = L.marker([lat, lon], { icon: makeLocationIcon() }).addTo(map);
+
+      map.setView([lat, lon], 16, { animate: true, duration: 0.8 });
+      locateBtn.classList.add('active');
+      locateBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>`;
+      showToast('Showing your location');
+    },
+    (err) => {
+      locateBtn.classList.add('error');
+      locateBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>`;
+      if (err.code === err.PERMISSION_DENIED) {
+        showToast('Location access denied. Enable it in browser settings.');
+      } else {
+        showToast('Could not determine your location.');
+      }
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async function init() {
+  const loading = document.getElementById('loading');
+  const nodes   = await fetchNasoni();
+  allNasoniCount = nodes.length;
+
+  nodes.forEach(n => {
+    const marker = L.marker([n.lat, n.lon], { icon: makeNasoneIcon() });
+    const t    = n.tags || {};
+    const name = t.name || t['name:en'] || 'Nasone';
+
+    // Build location string from available OSM address tags
+    const locationParts = [
+      t['addr:street'],
+      t['addr:suburb'] || t.neighbourhood || t.district,
+    ].filter(Boolean);
+    const location = locationParts.length ? locationParts.join(', ') : null;
+
+    // Parse OSM wikipedia tag (format: "en:Article_Name" or "Article_Name")
+    let wikiSlug = null;
+    if (t.wikipedia) {
+      const parts = t.wikipedia.split(':');
+      const article = (parts.length > 1 ? parts.slice(1).join(':') : parts[0]).trim().replace(/ /g, '_');
+      if (article) wikiSlug = article;
+    }
+
+    marker.on('click', e => {
+      L.DomEvent.stopPropagation(e);
+      Object.values(historicMarkerMap).forEach(m => m.setIcon(makeHistoricIcon(false)));
+      openPanel({
+        badge: 'Nasone',
+        badgeClass: 'nasone',
+        name,
+        meta: location || null,
+        note: null,
+        aqueduct: null,
+        wiki: wikiSlug,
+        lat: n.lat,
+        lon: n.lon,
+      });
+    });
+    nasoniLayer.addLayer(marker);
+  });
+
+  updateCount();
+  setTimeout(() => {
+    loading.classList.add('fade-out');
+    setTimeout(() => loading.remove(), 650);
+  }, 500);
+})();
+</script>
+</body>
+</html>
